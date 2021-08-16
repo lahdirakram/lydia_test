@@ -1,6 +1,5 @@
 """this module contains a class that handles downoading, processing and saving data"""
 import sqlite3
-import datetime
 
 class DataHandler:
     """this class handles downoading, processing and saving data"""
@@ -27,7 +26,6 @@ class DataHandler:
         data = list(iterable)
 
         return data
-
     def process_data(self, data) -> list:
         """
         this method takes data fetched from premium_payments table and 
@@ -39,46 +37,41 @@ class DataHandler:
             :returns
             processed_data : list of tuples of  the new table like describes before
         """
-        # initializing variables
-        member_id = date_start = date_end = type = None
-        processed_data = []
-        for row in data:
-            # for each row in table
-            if member_id is None:
-                # case of first row
-                member_id, date_start, date_end, type = row
+        import pandas as pd
+        from datetime import timedelta, datetime
 
-            elif member_id != row[0]:
-                # case of new member_id
+        subscription_id = 0
+        def subscription(row):
+            nonlocal subscription_id
+            if type(row["next_date_start"]) == str:
+                next_date_start = datetime.strptime(row["next_date_start"],"%Y-%m-%d")
+                date_end = datetime.strptime(row['date_end'],"%Y-%m-%d")
+                if (next_date_start - date_end) <= timedelta(days=3):
+                    if row['type'] == row['next_type']:
+                        return subscription_id
+   
+            subscription_id +=1
+            return (subscription_id-1)
 
-                # inserting old row and creating new one
-                processed_data.append((member_id, date_start, date_end, type))
-                member_id, date_start, date_end, type = row
+        df=pd.DataFrame(
+            data, 
+            columns=("member_id","date_start","date_end","type")
+            )
+        df["next_date_start"] = df.groupby("member_id", as_index=False)["date_start"].shift(-1)
+        df["next_type"] = df.groupby("member_id",as_index=False)["type"].shift(-1)
+        df["subscription_id"] = df.apply(subscription,axis=1)
 
-            elif type != row[3]:
-                # case of new type
+        processed_data = df\
+            .groupby("subscription_id",as_index=False)\
+                .agg({
+                    'member_id':"first",
+                    'date_start': "min", 
+                    'date_end': "max",
+                    'type': "first"
+                })
 
-                # inserting old row and creating new one
-                processed_data.append((member_id, date_start, date_end, type))
-                _, date_start, date_end, type = row
+        return processed_data[['member_id','date_start','date_end','type']].values.tolist()
 
-            elif datetime.datetime.strptime(row[1],'%Y-%m-%d')\
-                 - datetime.datetime.strptime(date_end,'%Y-%m-%d')\
-                     < datetime.timedelta(3):
-                # case of small time difference (<= 3 days) between old subscription and the new one
-                # no row insertion but updating the end date of subscription
-                date_end = row[2]
-            else:
-                # case of big difference (> 3 days) between old subscription and the new one
-                # inserting old row and creating new one
-                processed_data.append((member_id, date_start, date_end, type))
-                _, date_start, date_end, type = row
-
-        if not member_id == date_start == date_end == type == None:
-            # finally inserting the last row if it exists
-            processed_data.append((member_id, date_start, date_end, type))
-
-        return processed_data
 
     def save_data(self, table, processed_data, table_creation_sql=None) -> None:
         """
