@@ -114,5 +114,4 @@ class DataHandler:
         
         # running sql insertion statement
         self.connection.execute(f"insert into subscriptions values {str_values}")
-        self.connection.commit()
-
+        self.connection.execute("commit")
