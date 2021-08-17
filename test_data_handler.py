@@ -1,13 +1,21 @@
-from datetime import datetime, timedelta
+import sqlite3
 import unittest
+from datetime import datetime, timedelta
+
 import pandas as pd
+
 from data_handler import DataHandler
 
 
 class TestDataHandler(unittest.TestCase):
 
     def setUp(self):
-        self.dh = DataHandler("db.db")
+        self.dh = DataHandler("test_db.db")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        sqlite3.connect("test_db.db").execute("drop table subscriptions;")
+        return super().tearDownClass()
 
     def test_download_data(self):
         data = self.dh.download_data()
@@ -46,7 +54,7 @@ class TestDataHandler(unittest.TestCase):
         processedData = self.dh.process_data(data)
         self.dh.save_data(processedData)
         cursor = self.dh.connection.execute("SELECT * FROM subscriptions")
-        
+
         self.assertEqual(len(cursor.fetchall()), len(processedData))
 
 suite = unittest.TestLoader().loadTestsFromTestCase(TestDataHandler)
