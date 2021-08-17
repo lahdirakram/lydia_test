@@ -40,6 +40,14 @@ class TestDataHandler(unittest.TestCase):
         checked_data = df.groupby('member_id').apply(check_member_subscriptions)
 
         self.assertEqual(checked_data.size, checked_data.sum())
+    
+    def test_save_data(self):
+        data = self.dh.download_data()
+        processedData = self.dh.process_data(data)
+        self.dh.save_data(processedData)
+        cursor = self.dh.connection.execute("SELECT * FROM subscriptions")
+        
+        self.assertEqual(len(cursor.fetchall()), len(processedData))
 
 suite = unittest.TestLoader().loadTestsFromTestCase(TestDataHandler)
 unittest.TextTestRunner(verbosity=2).run(suite)
